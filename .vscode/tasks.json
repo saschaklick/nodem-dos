@@ -1,0 +1,42 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "cargo",
+            "command": "build",
+            "args": [
+                "-Zjson-target-spec",
+                "--features=dom",
+                "--release"           
+            ],
+            "problemMatcher": ["$rustc"],
+        },
+        {
+            "label": "link",
+            "type": "cargo",
+            "command": "objcopy",
+            "args": [
+                "-Zjson-target-spec",
+                "--features=vm",
+                "--release",
+                "--",
+                "-O", "binary",
+                "--binary-architecture=i386:x86",                
+                "build/nodem.com"
+            ],
+            "dependsOn": ["build"],
+        },
+        {
+            "label": "run",
+            "type": "shell",
+            "command": "dosbox -conf ${workspaceFolder}/build/dosbox.conf",
+            "dependsOn" : ["link"]
+        },
+        {
+            "label": "clean",
+            "type": "cargo",
+            "command": "clean"
+        },
+    ]
+}

@@ -1,0 +1,24 @@
+[package]
+name = "nodem-dos"
+version = "0.1.0"
+authors = ["Sascha Klick <rustdev@sklick.de>", "Hayato Ohhashi <o8@vmm.dev>"]
+edition = "2018"
+repository = "https://github.com/saschaklick/nodem-dos"
+description = "Implementation for the nodem-rs framework as a headerless (MS-)DOS executable"
+license = "MIT"
+
+[profile.release]
+opt-level = "z"
+
+[features]
+vm = [ "nodem-rs/vm" ]
+dom = [ "nodem-rs/dom" ]
+xml = [ "dom", "nodem-rs/xml", "nodem-rs/alloc" ]
+
+[dependencies]
+rlibc = "1.0.0"
+log = { version = "0.4", features = ["max_level_debug", "release_max_level_off"] }
+#nodem-rs = { git = "https://github.com/saschaklick/nodem-rs", features=["vm", "xml", "dom", "alloc", "ninepatch"] }
+nodem-rs = { path = "../nodem-rs", features=["vm", "xml", "dom", "alloc", "ninepatch"] }
+virtmach = { git = "https://github.com/saschaklick/virtmach-rs", features=["random", "i16"] }
+

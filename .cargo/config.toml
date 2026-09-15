@@ -1,0 +1,9 @@
+[build]
+target = "i386-rust_dos.json"
+rustflags = ["-C", "link-arg=-Tlink.x"]
+
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
+
+[env]
+NODEM_ARCH = "MSDOS"
