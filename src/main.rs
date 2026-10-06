@@ -13,10 +13,9 @@ use nodem_rs::{Area, Point, Size, PosX, PosY};
 use nodem_rs::media::{self, Media, Identifier};
 use nodem_rs::media::font::{Alignment};
 use nodem_rs::surface::{Surface};
+
 #[cfg(feature = "vm")]
 use virtmach::{VirtMach, RuntimeError, interrupts::*};
-#[cfg(feature = "vm")]
-use nodem_rs::int_surface;
 
 entry!(main);
 
@@ -50,11 +49,11 @@ impl Example {
                 let _ = load_file(PAGE, 1024).inspect(|buf|{            
                     self.dom.from_xml(unsafe { str::from_utf8_unchecked(buf) });
                 }).inspect_err(|_|{
-                self.dom.from_xml("<body vertical width=flex height=flex><div flex=1></div><div border=rect padding=4 align=center>PAGE.XML error</div><div flex=1></div></body>");
+                    self.dom.from_xml("<body vertical width=flex height=flex><div flex=1></div><div border=rect padding=4 align=center>PAGE.XML error</div><div flex=1></div></body>");
                 });            
             }
 
-            self.dom.from(surface.media.get_page(200).content);  
+            //self.dom.from(surface.media.get_page(200).content);
         }
     }
 
@@ -77,7 +76,7 @@ fn main() {
     let frame = unsafe { core::slice::from_raw_parts_mut(frame_ptr, frame_len ) };
 
 	let mut surface = Surface::new(frame, frame_size.width, frame_size.height);	 
-    #[cfg(feature = "vm")]
+    #[cfg(feature = "vm")]        
     let mut vm = VirtMach::new();       
 
 	let mut example = Example::new();    
@@ -85,89 +84,86 @@ fn main() {
     example.init(&mut surface);	    
     
     set_mode(MODE);    
-
-    // let mut mouse_ready = [0u16; 1];
-    // let mut mouse_pos = [0u16; 2];
-
-    //unsafe { asm!("push ax", "mov ax, 0020h", "int 33h", "mov ax, 0000h", "int 33h", out("ax") mouse_ready[0]); asm!("pop ax"); }    
+    
+    let mouse_ready: u16;
+    let _mouse_button_cnt: u16;
+    unsafe { asm!("int 33h", inout("ax") 0x0000u16 => mouse_ready, out("bx") _mouse_button_cnt); }
 
     let mut loop_cnt: u32 = 0;
     let mut frame_cnt: u32 = 0;	
 
     #[cfg(feature = "vm")]
     {
-        vm.load_program(surface.media.get_program(3));
+        vm.load_program(surface.media.get_program(4));
     }
 
     loop {		
 		example.repeat(loop_cnt, frame_cnt);		                
 
         #[cfg(feature = "vm")]
-        {
-            let mut interrupts: [&mut dyn SoftInterrupt;4] = [
-                &mut proc::Interrupt {},
+        {                        
+            use nodem_rs::int_surface;            
+
+            let mut interrupts: [&mut dyn SoftInterrupt;7] = [                
                 &mut math::Interrupt {},
-                &mut random::Interrupt {},                
+                &mut proc::Interrupt {},                       
+                &mut string::Interrupt {},                
+                &mut random::Interrupt {},         
+                &mut dummy::Interrupt {},                
+                &mut dummy::Interrupt {}, 
                 &mut int_surface::IntSurface { surface : &mut surface }
             ];
 
-            vm.run(1024, &mut interrupts);                       
+            vm.run(8 * 1024, &mut interrupts);                       
             
             if vm.error != RuntimeError::NoError {
                 surface.draw_text(Identifier::Index(0), "ERROR", Point { x: 1, y: 1 });
-            }            
+            }               
         }
 
-        #[cfg(feature = "dom")]
+        #[cfg(all(feature = "dom", not(feature = "vm")))]
         {
             surface.clear(0);                   
             surface.update(&mut example.dom);                                        
         }        
         
-        draw_fps(&mut surface, loop_cnt);                
+        draw_fps(&mut surface, loop_cnt);
 
-        // if mouse_ready[0] == 0xffff {
-        //     unsafe { asm!("push ax", "push bx", "push cx", "push dx"); }
-        //     unsafe { asm!("mov ax, 0003h", "int 33h", out("cx") mouse_pos[0], out("dx") mouse_pos[1]); }
-        //     unsafe { asm!("pop dx", "pop cx", "pop bx", "pop ax"); }
-
-        //     //println!(">> {} {} {}", mouse_ready[0], mouse_pos[0], mouse_pos[1]);        
-        
-        //     surface.draw_image(Identifier::Index(252), Point{ x: mouse_pos[0] as i16, y: mouse_pos[1] as i16 }, None);           
-        // }
+        if mouse_ready == 0xffff {
+            // Get position: BX = buttons, CX = x, DX = y. X is in 640-wide virtual coordinates in mode 13h.
+            let (mut x, y): (u16, u16);
+            unsafe { asm!("int 33h", inout("ax") 0x0003u16 => _, out("bx") _, out("cx") x, out("dx") y); }
+            if let GraphicsMode::Mode13 = MODE { x /= 2; }
+            surface.draw_image(Identifier::Index(252), Point { x: x as i16, y: y as i16 }, None);
+        }
 		        
-        //let pixels = (0xa0000) as *mut u8;                
-        let pixels = (0xa0000 - 20 * 320 - 32) as *mut u8;                
-        //let pixels = (0xa0000 - 103 * 320 - 112) as *mut u8;                
-
-        let framebuffer: &mut [u8] = unsafe { core::slice::from_raw_parts_mut(pixels, match MODE { GraphicsMode::Mode12 => 640 * 480 / 8, GraphicsMode::Mode13 => 320 * 200 }) };        
-        
         match MODE {
             GraphicsMode::Mode12 => {
-                framebuffer.copy_from_slice(frame);                
+                // Planar mode: after int 10h the map mask enables all 4 planes, so one byte
+                // written per 8 pixels yields color 15 for set bits. 80 bytes per row.
+                for y in 0..480u16 {
+                    let row = &frame[y as usize * 80..(y as usize + 1) * 80];
+                    let mut line = [0u8; 80];
+                    line.copy_from_slice(row);
+                    blit_to_vga(y * 80, &line);
+                }
             },
-            GraphicsMode::Mode13 => {                     
-                //let mut segment = 0xa000u16;           
-                let mut offset = 0x00u16;
-                for y in 0..200 {                     
-                    for x in 0..320 {                                                
-                        let pixel = if (frame[(y * 320 + x) as usize / 8] & (1 << (7 - (x % 8)))) != 0 { 15 } else { 0 };                        
-                        //unsafe { asm!("mov ds, {seg:x}", "mov si, {off:x}", "mov ds:[si], {pxl:x}", seg = in(reg) segment, off = in(reg) offset as u16, pxl = in(reg) pixel as u16); }
-                        framebuffer[(y * 320 + x) as usize] = pixel;
-                        offset += 0x1;
-                        if offset == 0x10 {
-                            offset = 0;
-                            //segment += 0x1;                            
-                        }
+            GraphicsMode::Mode13 => {
+                for y in 0..200u16 {
+                    let mut line = [0u8; 320];
+                    for x in 0..320usize {
+                        let byte = frame[y as usize * 40 + x / 8];
+                        line[x] = if byte & (1 << (7 - (x % 8))) != 0 { 15 } else { 0 };
                     }
-			    }			
+                    blit_to_vga(y * 320, &line);
+                }
             }
-        }                
+        }
 
 
 		loop_cnt += 1;		        
 		
-		if loop_cnt as usize == framebuffer.len() {
+		if loop_cnt == match MODE { GraphicsMode::Mode12 => 640 * 480 / 8, GraphicsMode::Mode13 => 320 * 200 } {
 			frame_cnt += 1;
 			loop_cnt = 0;
 		}
@@ -186,6 +182,25 @@ fn set_mode(mode: GraphicsMode) {
         GraphicsMode::Mode12 => unsafe { asm!("mov ax, 0012h", "int 10h" ); },
         GraphicsMode::Mode13 => unsafe { asm!("mov ax, 0013h", "int 10h" ); },
     }    
+}
+
+fn blit_to_vga(offset: u16, line: &[u8]) {
+    unsafe {
+        asm!(
+            "push es",
+            "push si",
+            "mov es, {seg:x}",
+            "mov si, {src:x}",
+            "cld",
+            "rep movsb",
+            "pop si",
+            "pop es",
+            seg = in(reg) 0xA000u16,
+            src = in(reg) line.as_ptr() as u16,
+            inout("di") offset => _,
+            inout("cx") line.len() as u16 => _,
+        );
+    }
 }
 
 fn draw_fps(surface: &mut Surface, fps: u32) {

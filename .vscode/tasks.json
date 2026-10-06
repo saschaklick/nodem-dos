@@ -6,8 +6,7 @@
             "type": "cargo",
             "command": "build",
             "args": [
-                "-Zjson-target-spec",
-                "--features=dom",
+                "-Zjson-target-spec",                
                 "--release"           
             ],
             "problemMatcher": ["$rustc"],
@@ -17,9 +16,23 @@
             "type": "cargo",
             "command": "objcopy",
             "args": [
-                "-Zjson-target-spec",
-                "--features=vm",
+                "-Zjson-target-spec",                
+                "--release",                
+                "--",
+                "-O", "binary",
+                "--binary-architecture=i386:x86",                
+                "build/nodem.com"
+            ],
+            "dependsOn": ["build"],
+        },
+        {
+            "label": "link with vm",
+            "type": "cargo",
+            "command": "objcopy",
+            "args": [
+                "-Zjson-target-spec",                
                 "--release",
+                "--features", "default,vm",
                 "--",
                 "-O", "binary",
                 "--binary-architecture=i386:x86",                
@@ -32,6 +45,24 @@
             "type": "shell",
             "command": "dosbox -conf ${workspaceFolder}/build/dosbox.conf",
             "dependsOn" : ["link"]
+        },
+        {
+            "label": "run with vm",
+            "type": "shell",
+            "command": "dosbox -conf ${workspaceFolder}/build/dosbox.conf",
+            "dependsOn" : ["link with vm"]
+        },
+        {
+            "label": "bloat",
+            "type": "cargo",
+            "command": "bloat",
+            "args": [
+                "-Zjson-target-spec",                
+                "--release",
+                "--",                
+                "--binary-architecture=i386:x86",                                
+            ],
+            "dependsOn": ["build"],
         },
         {
             "label": "clean",

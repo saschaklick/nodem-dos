@@ -13,9 +13,13 @@ use crate::dos::cooperative_multitasking::TASKING;
 #[link_section = ".startup"]
 #[no_mangle]
 fn _start() -> ! {
+    if let Err(msg) = dos::unreal::enter() {
+        println!("{}", msg);
+        dos::exit(1);
+    }
     #[allow(static_mut_refs)]
     unsafe {
-        GLOBAL_ALLOCATOR.init();
+        GLOBAL_ALLOCATOR.init(); // Heap lies above DS:FFFF, needs unreal mode
         TASKING.init(); // Relies on the allocator
     }
     extern "Rust" {

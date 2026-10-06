@@ -1,5 +1,6 @@
 //! Memory heap allocation for DOS programs.
-//! Uses conventional memory for DOS programs, from _heap segment start to extended BIOS data area (EBDA)
+//! Uses conventional memory for DOS programs, from the end of the program's 64K segment to the end of
+//! the memory block DOS assigned to the program. Offsets above 0xFFFF require unreal mode (see unreal.rs).
 //! Uses linear algorithm for allocating memory, which is not optimal, but it's simple and works.
 
 use core::alloc::{GlobalAlloc, Layout};
@@ -16,10 +17,11 @@ struct AllocatorBlock {
 
 pub struct DosAllocator {
     first_block_ptr: *mut AllocatorBlock,
+    last_memory_byte_addr: u32, // DS-relative offset
 }
 
-impl DosAllocator {
-    const LAST_MEMORY_BYTE_ADDR: u32 = 0x9FBFF; // (0X9000 << 4) + 0XFBFF, last byte of memory before extended BIOS data area
+impl DosAllocator {    
+    const HEAP_START_ADDR: u32 = 0x10000;
     const ALLOCATOR_BLOCK_SIZE: usize = size_of::<AllocatorBlock>();
     const MIN_BLOCK_USEFUL_SIZE: usize = 16;
 
@@ -30,18 +32,17 @@ impl DosAllocator {
         second_block_addr - first_block_addr
     }
 
-    fn free_space_before_next_block(block: *mut AllocatorBlock) -> usize {
+    fn free_space_before_next_block(&self, block: *mut AllocatorBlock) -> usize {
         assert_ne!(block, core::ptr::null_mut());
-        assert!((block as u32) < Self::LAST_MEMORY_BYTE_ADDR);
+        assert!((block as u32) < self.last_memory_byte_addr);
         let next_block = unsafe { (*block).next };
         if next_block.is_none() {
-            return Self::LAST_MEMORY_BYTE_ADDR as usize - block as usize;
+            return self.last_memory_byte_addr as usize - block as usize;
         }
         let next_block = next_block.unwrap();
         Self::diff_between_blocks_ptr(block, next_block) - Self::ALLOCATOR_BLOCK_SIZE
     }
 
-    /// Converts block address to pointer usable by the program
     fn block_addr_to_useful_ptr(block: *mut AllocatorBlock) -> *mut u8 {
         assert_ne!(block, core::ptr::null_mut());
         (block as usize + Self::ALLOCATOR_BLOCK_SIZE) as *mut u8
@@ -59,7 +60,7 @@ unsafe impl GlobalAlloc for DosAllocator {
             };
         }
 
-        let free_space_before_next_block = Self::free_space_before_next_block(current_block_ptr);
+        let free_space_before_next_block = self.free_space_before_next_block(current_block_ptr);
         if free_space_before_next_block <= Self::MIN_BLOCK_USEFUL_SIZE + Self::ALLOCATOR_BLOCK_SIZE {
             // No space for new block, just use the whole space
             (*current_block_ptr).used = true;
@@ -136,19 +137,23 @@ unsafe impl GlobalAlloc for DosAllocator {
 }
 
 impl DosAllocator {
-    #[allow(unused_assignments)]
     pub fn init(&mut self) {
-        let mut heap_segment_number: u32 = 0;
+        // In a .COM program DS is the PSP segment; PSP offset 2 holds the first segment past the
+        // memory block DOS assigned to the program.
+        let ds: u16;
+        let memory_end_segment: u16;
         unsafe {
-            asm!("mov ax, _heap", out("ax") heap_segment_number);
+            asm!("mov {0:x}, ds", out(reg) ds);
+            memory_end_segment = core::ptr::read_volatile(2 as *const u16);
         }
-        // Compute heap address from segment number
-        let heap_addr = ((heap_segment_number & 0xFFFF) << 4) as u32;
+        let memory_end_addr = ((memory_end_segment as u32).saturating_sub(ds as u32)) << 4;
+        let heap_addr = Self::HEAP_START_ADDR;
         let heap_ptr_as_block = heap_addr as *mut AllocatorBlock;
 
         // Create an empty block at the beginning of the heap, containing all free space
-        assert!(heap_addr as u32 <= DosAllocator::LAST_MEMORY_BYTE_ADDR);
-        let first_block_size = DosAllocator::LAST_MEMORY_BYTE_ADDR - heap_addr;
+        assert!(heap_addr + ((Self::ALLOCATOR_BLOCK_SIZE + Self::MIN_BLOCK_USEFUL_SIZE) as u32) < memory_end_addr, "not enough conventional memory for heap");
+        self.last_memory_byte_addr = memory_end_addr - 1;
+        let first_block_size = self.last_memory_byte_addr - heap_addr;
         unsafe {
             *heap_ptr_as_block = AllocatorBlock {
                 next: None,
@@ -163,6 +168,7 @@ impl DosAllocator {
     const fn new() -> Self {
         Self {
             first_block_ptr: core::ptr::null_mut(),
+            last_memory_byte_addr: 0,
         }
     }
 }

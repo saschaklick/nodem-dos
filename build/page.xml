@@ -5,9 +5,9 @@
         <div border="rect" padding="5 4 3 5" margin="1" flex=0 align=end border=1>Rock</div>
     </div>
     <div border=rect vertical padding=1 flex=3>
-        <div border="rect" padding=2 margin="1" flex=0 align=center>Tell</div>
+        <div border="rect" padding=0 margin="1" flex=0 align=center>{font:100}{fixh}Way\</div>
         <div border="rect" padding=2 margin="1" flex="1" align=end>AB</div>        
         <div padding=5 margin="1" flex="0" background=1 color=0 border=2>{img:3}{font:2}123</div>
-        <div padding=2 align=center border=1 padding="5 4 3 5" margin=2>{font:1}Coach</div>
+        <div padding=2 align=center border=1 padding="5 4 3 5" margin=2>{font:1}{tinv}Coach</div>
     </div>
 </body>
