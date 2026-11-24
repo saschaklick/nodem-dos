@@ -7,19 +7,28 @@ repository = "https://github.com/saschaklick/nodem-dos"
 description = "Implementation for the nodem-rs framework as a headerless (MS-)DOS executable"
 license = "MIT"
 
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(nodem_mode)'] }
+
 [profile.release]
 opt-level = "z"
 lto = true
+codegen-units = 1
 
 [features]
 default = ["xml", "dom"]
-vm = [ "nodem-rs/vm" ]
+vm = [ "virtmach", "nodem-rs/vm" ]
 dom = [ "nodem-rs/dom" ]
 xml = [ "dom", "nodem-rs/xml", "nodem-rs/alloc" ]
+mode12 = []
+mode13 = []
 
 [dependencies]
 rlibc = "1.0.0"
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_off"] }
 nodem-rs = { git = "https://github.com/saschaklick/nodem-rs", features=["ninepatch"] }
-virtmach = { git = "https://github.com/saschaklick/virtmach-rs", features=["random", "i16"] }
+virtmach = { git = "https://github.com/saschaklick/virtmach-rs", features=["i16"], optional=true }
 
+
+[patch."https://github.com/saschaklick/virtmach-rs"]
+virtmach = { path = "../virtmach-rs" }

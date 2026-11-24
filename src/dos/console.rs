@@ -35,5 +35,6 @@ impl Write for DosWriter {
 }
 
 fn printc(ch: u8) {
-    unsafe { asm!("int 0x21", in("ah") 0x02_u8, in("dl") ch) }
+    // int 21h/02h returns the character in AL, so EAX is clobbered and has to be declared as such
+    unsafe { asm!("int 0x21", inout("eax") 0x0200u32 => _, in("edx") ch as u32) }
 }

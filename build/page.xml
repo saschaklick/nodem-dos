@@ -1,13 +1,15 @@
 <body width=flex height=flex>
-    <div border=\"rect\" vertical margin="0 1 0 0" padding="1" flex=2 font=0 align=stretch>
-        <div border="rect" padding="2" margin="1" flex=1 align=start>Mail</div>
-        <div border="rect" padding="2" margin="1" flex=1 align=center>House{nl}{img:0}</div>
-        <div border="rect" padding="5 4 3 5" margin="1" flex=0 align=end border=1>Rock</div>
+    <div border="SOM" vertical margin="0 1 0 0" padding="1" flex=2 font=0 align=stretch background="#140">
+        <div border="rect" padding="2" margin="1" flex=1 align=start>{col:#0000ff}Mail</div>
+        <div border="0" padding="2" margin="1" flex=1 align=center color="#500050" background="#464">House{nl}{img:GatoColor}</div>
+        <div border="rect" padding="5 4 3 5" margin="1" flex=0 align=end border="0">{col:#ff0000}Rock</div>
     </div>
-    <div border=rect vertical padding=1 flex=3>
+    <div border=solid vertical margin="0 1 0 0" padding=1 flex=3>
         <div border="rect" padding=0 margin="1" flex=0 align=center>{font:100}{fixh}Way\</div>
         <div border="rect" padding=2 margin="1" flex="1" align=end>AB</div>        
-        <div padding=5 margin="1" flex="0" background=1 color=0 border=2>{img:3}{font:2}123</div>
-        <div padding=2 align=center border=1 padding="5 4 3 5" margin=2>{font:1}{tinv}Coach</div>
+        <div padding=5 margin="1" flex="0" background="#aaa" color=0 border=rect>{img:Gato}{font:2}123</div>
+        <div padding=2 align=center border=0 padding="5 4 3 5" margin=2 background="#666">{font:1}{tinv}Coach</div>
     </div>
+    <div padding=5 margin="1" flex="1" background="#022">{img:Nofretete}</div>
+    <div border=Rounded vertical padding=1 flex=1>{col:#880}{img:Pointer}</div>
 </body>

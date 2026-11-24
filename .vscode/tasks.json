@@ -1,5 +1,5 @@
 {
-    "version": "2.0.0",
+    "version": "2.0.0",    
     "tasks": [
         {
             "label": "build",
@@ -8,7 +8,7 @@
             "args": [
                 "-Zjson-target-spec",                
                 "--release"           
-            ],
+            ],                     
             "problemMatcher": ["$rustc"],
         },
         {
@@ -22,7 +22,7 @@
                 "-O", "binary",
                 "--binary-architecture=i386:x86",                
                 "build/nodem.com"
-            ],
+            ],            
             "dependsOn": ["build"],
         },
         {
@@ -37,13 +37,13 @@
                 "-O", "binary",
                 "--binary-architecture=i386:x86",                
                 "build/nodem.com"
-            ],
+            ],            
             "dependsOn": ["build"],
         },
         {
             "label": "run",
             "type": "shell",
-            "command": "dosbox -conf ${workspaceFolder}/build/dosbox.conf",
+            "command": "dosbox -conf ${workspaceFolder}/build/dosbox.conf",            
             "dependsOn" : ["link"]
         },
         {

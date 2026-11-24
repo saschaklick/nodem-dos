@@ -53,34 +53,41 @@ unsafe impl GlobalAlloc for DosAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         // Look for next free block
         let mut current_block_ptr = self.first_block_ptr;
-        while (*current_block_ptr).used || (*current_block_ptr).size < layout.size() + Self::ALLOCATOR_BLOCK_SIZE {
+        while (*current_block_ptr).used || (*current_block_ptr).size < ((layout.size() + Self::ALLOCATOR_BLOCK_SIZE + 3) & !3) {
             current_block_ptr = match (*current_block_ptr).next {
                 Some(ptr) => ptr,
                 None => return core::ptr::null_mut(), // No free block found, return null ptr
             };
         }
 
-        let free_space_before_next_block = self.free_space_before_next_block(current_block_ptr);
-        if free_space_before_next_block <= Self::MIN_BLOCK_USEFUL_SIZE + Self::ALLOCATOR_BLOCK_SIZE {
-            // No space for new block, just use the whole space
+        // Bytes from this block's header to the next block's header (or to the end of the heap)
+        let next = (*current_block_ptr).next;
+        let total = match next {
+            Some(n) => Self::diff_between_blocks_ptr(current_block_ptr, n),
+            None => self.last_memory_byte_addr as usize - current_block_ptr as usize,
+        };
+        // Round up so every block header stays aligned
+        let needed = (layout.size() + Self::ALLOCATOR_BLOCK_SIZE + 3) & !3;
+
+        if total < needed + Self::ALLOCATOR_BLOCK_SIZE + Self::MIN_BLOCK_USEFUL_SIZE {
+            // Not enough left over for another block, use the whole space
             (*current_block_ptr).used = true;
-            (*current_block_ptr).size = free_space_before_next_block;
+            (*current_block_ptr).size = total;
             return Self::block_addr_to_useful_ptr(current_block_ptr);
         }
 
-        // Create a new unused block between current and next
-
-        let current_block_size = layout.size() + Self::ALLOCATOR_BLOCK_SIZE;
-
-        // Create a new block just after current block
-        let new_block_ptr = (current_block_size + current_block_ptr as usize) as *mut AllocatorBlock;
-        (*new_block_ptr).next = (*current_block_ptr).next;
+        // Split: a new unused block right behind the allocated part
+        let new_block_ptr = (needed + current_block_ptr as usize) as *mut AllocatorBlock;
+        (*new_block_ptr).next = next;
         (*new_block_ptr).prev = Some(current_block_ptr);
-        (*new_block_ptr).size = free_space_before_next_block - current_block_size;
+        (*new_block_ptr).size = total - needed;
         (*new_block_ptr).used = false;
+        if let Some(n) = next {
+            (*n).prev = Some(new_block_ptr);
+        }
 
         (*current_block_ptr).next = Some(new_block_ptr);
-        (*current_block_ptr).size = current_block_size;
+        (*current_block_ptr).size = needed;
         (*current_block_ptr).used = true;
 
         Self::block_addr_to_useful_ptr(current_block_ptr)
@@ -180,3 +187,26 @@ fn alloc_error_handler(layout: Layout) -> ! {
 
 #[global_allocator]
 pub(crate) static mut GLOBAL_ALLOCATOR: DosAllocator = DosAllocator::new();
+/// Walks the block list and checks every link. Returns the number of blocks seen and whether the
+/// list is consistent. For debugging heap corruption.
+pub fn heap_check() -> (usize, bool) {
+    unsafe {
+        let a = &*(&raw const GLOBAL_ALLOCATOR);
+        let mut block = a.first_block_ptr;
+        let mut prev: Option<*mut AllocatorBlock> = None;
+        let mut count = 0usize;
+        loop {
+            if (block as u32) < DosAllocator::HEAP_START_ADDR || (block as u32) >= a.last_memory_byte_addr { return (count, false); }
+            if (*block).prev != prev { return (count, false); }
+            count += 1;
+            match (*block).next {
+                Some(n) => {
+                    if (n as usize) <= (block as usize) || (*block).size > (n as usize - block as usize) { return (count, false); }
+                    prev = Some(block);
+                    block = n;
+                }
+                None => return (count, true),
+            }
+        }
+    }
+}

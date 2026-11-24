@@ -1,6 +1,6 @@
 [build]
 target = "i386-rust_dos.json"
-rustflags = ["-C", "link-arg=-Tlink.x"]
+rustflags = ["-C", "link-arg=-Tlink.x", "--cfg=nodem_mode=\"rgb666\"", "-Zlocation-detail=none"]
 
 [unstable]
 build-std = ["core", "compiler_builtins", "alloc"]
